@@ -1,0 +1,866 @@
+---
+title: "Final Project Part 2: Regression"
+author: "Nick Tedesco"
+date: "2022-12-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Package and Data Loading
+
+```{r packages}
+
+library(ggplot2)
+library(tidyverse)
+library(caret)
+library(pROC)
+
+```
+
+```{r data}
+
+data <- read.csv('/Users/nick/Documents/GSPH/INFSCI 2595/fall2022_finalproject.csv')
+
+head(data)
+
+```
+
+```{r derived features}
+
+data <- data %>% 
+  mutate(
+    x5 = 1 - (x1 + x2 + x3 + x4), 
+    w = x2 / (x3 + x4), 
+    z = (x1 + x2) / (x4 + x5), 
+    t = v1 * v2, 
+    y = boot::logit(output), 
+    outcome = ifelse(output < 0.33, 'event', 'non_event'),
+    outcome = factor(outcome, levels = c("event", "non_event"))
+  )
+
+head(data)
+
+```
+
+## Part 2: Regression
+
+### iiA) Linear Regression Models
+
+Let's start by making a simple train/test split of the data. We will evaluate model performance by computing root mean squared error (RMSE) on model predictions made using the test set. 
+
+```{r train test split}
+
+## set seed for reproducibility
+set.seed(15213)
+
+## generate samples
+sub_sample <- sample(nrow(data), size = nrow(data)*0.80)
+
+train <- data[sub_sample, ]
+test <- data[-sub_sample, ]
+
+## subset to base set, 
+reg_base_train <- train %>% select(x1:m, y) 
+reg_base_test <- test %>% select(x1:m, y) 
+
+## subset to expanded set, 
+reg_expanded_train <- train %>% select(x1:m, x5:y) 
+reg_expanded_test <- test %>% select(x1:m, x5:y) 
+
+```
+
+First, fit the three models using the base feature set. 
+
+```{r Regression Base Feature Set Models}
+
+## all linear additive features
+reg_baseMod1 <- lm(formula = y ~ ., data = reg_base_train)
+
+## interaction of the categorical input with all continuous inputs
+reg_baseMod2 <- lm(formula = y ~ m * ., data = reg_base_train)
+
+## all pair-wise interactions of the continuous inputs
+reg_baseMod3 <- lm(formula = y ~ .^2, data = (reg_base_train %>% select(-m)))
+
+```
+
+Next, fit the three models using the expanded feature set. 
+
+```{r Regression Expanded Feature Set Models}
+
+## linear additive features
+reg_expandedMod1 <- lm(formula = y ~ ., data = reg_expanded_train)
+
+## interaction of the categorical input with continuous features
+reg_expandedMod2 <- lm(formula = y ~ m * ., data = reg_expanded_train)
+
+## pair-wise interactions between the continuous features
+reg_expandedMod3 <- lm(formula = y ~ .^2, data = (reg_expanded_train %>% select(-m)))
+
+```
+
+Finally, fit the three models using linear basis functions.
+
+UPDATE: It is worth noting, that for this part, I decided not to include x5. When I was fitting each of the models, I took a look at their coefficient summaries (even though I am only displaying the coefficient summaries for the top three models) - I noticed that the coefficient for x5 was often NA. I would guess that the reason behind this is that x5 is too highly correlated with some of the other inputs (probably x1 to x4).
+
+```{r Regression Linear Basis Function Models}
+
+reg_basisMod1 <- lm(formula = y ~ m + (x1 + I(x1^2)) * (x2 + x3 + x4 + z + I(z^2)) + 
+                      v1 + v2 + v3 + v4 + v5 + w + I(w^2), data = reg_expanded_train)
+
+reg_basisMod2 <- lm(formula = y ~ m + (x1 + I(x1^2) + I(x1^3)) * (x2 + x3 + x4 + z + I(z^2)) + 
+                  w + v1 + v2 + v3 + v4 + v5, data = reg_expanded_train)
+
+reg_basisMod3 <- lm(formula = y ~ m + (x1 + sin(x1) + cos(x1)) * (x2 + x3 + x4 + z + I(z^2) + w) + 
+                      (v1 + v2 + v3 + v4 + v5), data = reg_expanded_train)
+
+```
+
+Next, lets evaluate each of our models by computing test set RMSE. 
+
+```{r Regression Model Test Set RMSE}
+
+reg_base_pred1 <- predict(reg_baseMod1, reg_base_test)
+reg_base_rmse1 <- sqrt(mean((reg_base_pred1 - reg_base_test$y)^2))
+
+reg_base_pred2 <- predict(reg_baseMod2, reg_base_test)
+reg_base_rmse2 <- sqrt(mean((reg_base_pred2 - reg_base_test$y)^2))
+
+reg_base_pred3 <- predict(reg_baseMod3, reg_base_test)
+reg_base_rmse3 <- sqrt(mean((reg_base_pred3 - reg_base_test$y)^2))
+
+reg_expanded_pred1 <- predict(reg_expandedMod1, reg_expanded_test)
+reg_expanded_rmse1 <- sqrt(mean((reg_expanded_pred1 - reg_expanded_test$y)^2))
+
+reg_expanded_pred2 <- predict(reg_expandedMod2, reg_expanded_test)
+reg_expanded_rmse2 <- sqrt(mean((reg_expanded_pred2 - reg_expanded_test$y)^2))
+
+reg_expanded_pred3 <- predict(reg_expandedMod3, reg_expanded_test)
+reg_expanded_rmse3 <- sqrt(mean((reg_expanded_pred3 - reg_expanded_test$y)^2))
+
+reg_basis_pred1 <- predict(reg_basisMod1, reg_expanded_test)
+reg_basis_rmse1 <- sqrt(mean((reg_basis_pred1 - reg_expanded_test$y)^2))
+
+reg_basis_pred2 <- predict(reg_basisMod2, reg_expanded_test)
+reg_basis_rmse2 <- sqrt(mean((reg_basis_pred2 - reg_expanded_test$y)^2))
+
+reg_basis_pred3 <- predict(reg_basisMod3, reg_expanded_test)
+reg_basis_rmse3 <- sqrt(mean((reg_basis_pred3 - reg_expanded_test$y)^2))
+
+reg_rmse_df <- data.frame(model = c("reg_baseMod1", "reg_baseMod2", "reg_baseMod3", 
+                                    "reg_expandedMod1", "reg_expandedMod2", "reg_expandedMod3", 
+                                    "reg_basisMod1", "reg_basisMod2", "reg_basisMod3"),
+                          rmse = c(reg_base_rmse1, reg_base_rmse2, reg_base_rmse3, 
+                                   reg_expanded_rmse1, reg_expanded_rmse2, reg_expanded_rmse3, 
+                                   reg_basis_rmse1, reg_basis_rmse2, reg_basis_rmse3))
+
+reg_rmse_df %>% ggplot() + 
+  geom_point(aes(x = as.factor(model), y = rmse)) + 
+  xlab("Model") + 
+  ylab("RMSE") + 
+  ggtitle("Test Set RMSE for each of the Nine Linear Regression Models") + 
+  theme_bw() +
+  theme(axis.text.x = element_text(face = "bold", angle = 90))
+
+```
+
+As shown in the above figure, the three models with linear basis functions performed best in terms of test set RMSE. reg_basisMod3 performed the absolute best. 
+
+Now, lets take a look at the coefficient summary for these three models. 
+
+```{r coef summary top 3: reg_basisMod3}
+
+summary(reg_basisMod3)
+
+```
+
+```{r coef summary top 3: reg_basisMod2}
+
+summary(reg_basisMod2)
+
+```
+
+```{r coef summary top 3: reg_basisMod1}
+
+summary(reg_basisMod1)
+
+```
+
+x1 definitely seems to be important, if not the most important feature in the entire dataset. The separate interactions of x1 with x2, x3, and z are also important. Of the v inputs, v3 was the only one which remained consistently important across the models. w and z were also found to be important - the best results were obtained when no linear basis function was applied to w, and when a quadratic (square) was applied to z (with the EDA in mind, the square on z makes sense).
+
+It is worth noting that the model summaries show very high standard errors for some of our coefficients. In other words, we are relatively uncertain about the true (population) value of these coefficients. This is most certainly due to issues with colinearity in the models, which makes sense, because I included duplicated inputs (ex: z + I(z^2)) in all of the basis models.
+
+### iiB) Bayesian Regression Models
+
+First, we must define our functions for using Bayesian regression with Laplace Approximation.
+
+```{r Bayesian Functions: lm_logpost}
+
+lm_logpost <- function(unknowns, my_info)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- ncol(my_info$design_matrix)
+  
+  # extract the beta parameters from the `unknowns` vector
+  beta_v <- unknowns[1:length_beta]
+  
+  # extract the unbounded noise parameter, varphi
+  lik_varphi <- unknowns[length_beta + 1]
+  
+  # back-transform from varphi to sigma
+  lik_sigma <- exp(lik_varphi)
+  
+  # extract design matrix
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  mu <- as.vector(X %*% as.matrix(beta_v))
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dnorm(x = my_info$yobs,
+                       mean = mu,
+                       sd = lik_sigma,
+                       log = TRUE))
+  
+  # evaluate the log-prior
+  log_prior_beta <- sum(dnorm(x = beta_v,
+                              mean = my_info$mu_beta,
+                              sd = my_info$tau_beta,
+                              log = TRUE))
+  
+  log_prior_sigma <- dexp(x = lik_sigma, 
+                          rate = my_info$sigma_rate, 
+                          log = TRUE)
+  
+  # add the mean trend prior and noise prior together
+  log_prior <- log_prior_beta + log_prior_sigma
+  
+  # account for the transformation
+  log_derive_adjust <- lik_varphi
+  
+  # sum together
+  log_lik + log_prior + log_derive_adjust
+}
+
+```
+
+```{r Bayesian Functions: my_laplace}
+
+my_laplace <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 1001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+
+```
+
+```{r, Bayesian Functions: generate_lm_post_samples}
+
+generate_lm_post_samples <- function(mvn_result, length_beta, num_samples)
+{
+  MASS::mvrnorm(n = num_samples,
+                mu = mvn_result$mode,
+                Sigma = mvn_result$var_matrix) %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    purrr::set_names(c(sprintf("beta_%02d", 0:(length_beta-1)), "varphi")) %>% 
+    mutate(sigma = exp(varphi))
+}
+
+```
+
+```{r Bayesian Functions: post_lm_pred_samples}
+
+post_lm_pred_samples <- function(Xnew, Bmat, sigma_vector)
+{
+  # number of new prediction locations
+  M <- nrow(Xnew)
+  # number of posterior samples
+  S <- nrow(Bmat)
+  
+  # matrix of linear predictors
+  Umat <- Xnew %*% t(Bmat)
+  
+  # assmeble matrix of sigma samples, set the number of rows
+  Rmat <- matrix(rep(sigma_vector, M), M, byrow = TRUE)
+  
+  # generate standard normal and assemble into matrix
+  # set the number of rows
+  Zmat <- matrix(rnorm(M*S), M, byrow = TRUE)
+  
+  # calculate the random observation predictions
+  Ymat <- Umat + Rmat * Zmat
+  
+  # package together
+  list(Umat = Umat, Ymat = Ymat)
+  
+}
+
+```
+
+```{r Bayesian Functions: make_post_lm_pred}
+
+make_post_lm_pred <- function(Xnew, post)
+{
+  Bmat <- post %>% select(starts_with("beta_")) %>% as.matrix()
+  
+  sigma_vector <- post %>% pull(sigma)
+  
+  post_lm_pred_samples(Xnew, Bmat, sigma_vector)
+}
+
+```
+
+```{r Bayesian Functions: summarize_lm_pred_from_laplace}
+
+summarize_lm_pred_from_laplace <- function(mvn_result, Xtest, num_samples)
+{
+  # generate posterior samples of the beta parameters
+  post <- generate_lm_post_samples(mvn_result, ncol(Xtest), num_samples)
+  
+  # make posterior predictions on the test set
+  pred_test <- make_post_lm_pred(Xtest, post)
+  
+  # calculate summary statistics on the predicted mean and response
+  # summarize over the posterior samples
+  
+  # posterior mean, should you summarize along rows (rowMeans) or 
+  # summarize down columns (colMeans) ???
+  mu_avg <- rowMeans(pred_test$Umat)
+  y_avg <- rowMeans(pred_test$Ymat)
+  
+  # posterior quantiles for the middle 95% uncertainty intervals
+  mu_lwr <- apply(pred_test$Umat, 1, stats::quantile, probs = 0.025)
+  mu_upr <- apply(pred_test$Umat, 1, stats::quantile, probs = 0.975)
+  y_lwr <- apply(pred_test$Ymat, 1, stats::quantile, probs = 0.025)
+  y_upr <- apply(pred_test$Ymat, 1, stats::quantile, probs = 0.975)
+  
+  # book keeping
+  tibble::tibble(
+    mu_avg = mu_avg,
+    mu_lwr = mu_lwr,
+    mu_upr = mu_upr,
+    y_avg = y_avg,
+    y_lwr = y_lwr,
+    y_upr = y_upr
+  ) %>% 
+    tibble::rowid_to_column("pred_id")
+}
+
+```
+
+For the next part part, I will refit the best model from iA (reg_basisMod3). I will also refit reg_expandedMod3 - I chose this model because it seems like the interactions between continuous features (especially when including those in the expanded feature set) are important for predicting the outcome. This is evident from both test set RMSE and the model summaries. 
+
+```{r reg_bayesMod1 prep}
+
+reg_bayes_X01 <- model.matrix(y ~ m + (x1 + sin(x1) + cos(x1)) * (x2 + x3 + x4 + z + I(z^2) + w) + 
+                      (v1 + v2 + v3 + v4 + v5), data = reg_expanded_train)
+
+reg_bayes_info01 <- list(
+  yobs = reg_expanded_train$y,
+  design_matrix = reg_bayes_X01,
+  mu_beta = 0,
+  tau_beta = 5,
+  sigma_rate = 1
+)
+
+```
+
+```{r reg_bayesMod1}
+
+reg_bayes_laplace01 <- my_laplace(rep(0, ncol(reg_bayes_X01) + 1), lm_logpost, reg_bayes_info01)
+reg_bayes_laplace01 %>% glimpse()
+
+```
+
+```{r reg_bayesMod2 prep}
+
+reg_bayes_X02 <- model.matrix(y ~ .^2, data = (reg_expanded_train %>% select(-m)))
+
+reg_bayes_info02 <- list(
+  yobs = reg_expanded_train$y,
+  design_matrix = reg_bayes_X02,
+  mu_beta = 0,
+  tau_beta = 5,
+  sigma_rate = 1
+)
+
+```
+
+```{r reg_bayesMod2}
+
+reg_bayes_laplace02 <- my_laplace(rep(0, ncol(reg_bayes_X02) + 1), lm_logpost, reg_bayes_info02)
+reg_bayes_laplace02 %>% glimpse()
+
+```
+
+Once again, we will use test set RMSE to evaluate the models. First, let's generate our posterior predictions.
+
+```{r reg_bayesMod1 posterior predictions}
+
+reg_bayes_testX01 <- model.matrix(y ~ m + (x1 + sin(x1) + cos(x1)) * (x2 + x3 + x4 + z + I(z^2) + w) + 
+                      (v1 + v2 + v3 + v4 + v5), data = reg_expanded_test)
+
+reg_bayes_pred01 <- summarize_lm_pred_from_laplace(reg_bayes_laplace01, reg_bayes_testX01, 5000)
+reg_bayes_pred01 %>% glimpse()
+
+```
+
+```{r reg_bayesMod2 posterior predictions}
+
+reg_bayes_testX02 <- model.matrix(y ~ .^2, data = (reg_expanded_test %>% select(-m)))
+
+reg_bayes_pred02 <- summarize_lm_pred_from_laplace(reg_bayes_laplace02, reg_bayes_testX02, 5000)
+reg_bayes_pred02 %>% glimpse()
+
+```
+
+Now, calculate RMSE by comparing y_avg to the actual y value.
+
+```{r Bayesian Regression Model RMSE}
+
+reg_bayes_rmse1 <- sqrt(mean((reg_bayes_pred01$y_avg - reg_base_test$y)^2))
+
+reg_bayes_rmse2 <- sqrt(mean((reg_bayes_pred02$y_avg - reg_base_test$y)^2))
+
+reg_bayes_rmse_df <- data.frame(model = c("reg_bayesMod1", "reg_bayesMod2"),
+                          rmse = c(reg_bayes_rmse1, reg_bayes_rmse2))
+
+reg_bayes_rmse_df %>% ggplot() + 
+  geom_point(aes(x = as.factor(model), y = rmse)) + 
+  xlab("Model") + 
+  ylab("RMSE") + 
+  ggtitle("Test Set RMSE for each of the Two Bayesian Regression Models") + 
+  theme_bw() +
+  theme(axis.text.x = element_text(face = "bold", angle = 90))
+
+```
+
+The best of the two models was identified as reg_bayesMod1, as according to test set RMSE. Next, let's show the regression coefficient posterior summary statistics for our best model. 
+
+```{r reg_bayes_summary function}
+
+reg_bayes_summary <- function(laplace_object, design_matrix){
+  
+  names <- c(colnames(design_matrix), "varphi")
+  modes <- laplace_object$mode
+  sd <- sqrt(diag(laplace_object$var_matrix))
+  
+  df <- data.frame(Parameter = names, Estimate = modes, sdev = sd)
+  
+  df2 <- data.frame(Parameter = "sigma", Estimate = exp(df[nrow(df), 2]), sdev = exp(df[nrow(df), 3]))
+  
+  df %>% rbind(df2)
+    
+}
+
+```
+
+```{r reg_bayes_laplace01 summary part 1}
+
+reg_bayes_summary01 <- reg_bayes_summary(reg_bayes_laplace01, reg_bayes_X01)
+reg_bayes_summary01
+
+```
+
+Let's extract our posterior sigma term...
+
+```{r reg_bayes_laplace01 summary part 2}
+
+reg_bayes_summary01[nrow(reg_bayes_summary01), ]
+
+```
+
+... and compare it to sigma from the corresponding lm() model.
+
+```{r reg_basisMod2 sigma}
+
+summary(reg_basisMod3)$sigma
+
+```
+
+The Bayesian and MLE estimates on sigma are relatively similar (1.23 vs. 0.96, respectively). Overall, the posterior uncertainty on sigma is not very precise, considering the standard deviation on sigma was estimated to be 1.02 (almost as large as the sigma term itself) according to our Bayesian analyses. 
+
+### iiC) Linear Model Predictions
+
+Even though I have the means to easily visualize the confidence and prediction intervals for the Bayesian models, I will instead use the linear models for this part (I'd like to practice working with prediction intervals for lm objects!). 
+
+Start by defining the prediction grid. Considering x1 and z seem to be the most important inputs, we will define our grid in terms of these parameters. The rest of the variables will be assigned their mean (if continuous) or mode (if categorical) (UPDATE: I had to use at least two values for the categorical variable, so I picked the two most common ones). 
+
+```{r reg_pred_viz_grid}
+
+reg_pred_viz_grid <- expand.grid(x1 = seq(min(data$x1), max(data$x1), length.out = 101),
+                                 z = seq(min(data$z), max(data$z), length.out = 6),
+                                 x2 = mean(data$x2),
+                                 x3 = mean(data$x3),
+                                 x4 = mean(data$x4),
+                                 x5 = mean(data$x5),
+                                 v1 = mean(data$v1),
+                                 v2 = mean(data$v2),
+                                 v3 = mean(data$v3),
+                                 v4 = mean(data$v4),
+                                 v5 = mean(data$v5),
+                                 w = mean(data$w),
+                                 t = mean(data$t),
+                                 m = c("C", "D"), 
+                                 KEEP.OUT.ATTRS = FALSE,
+                                 stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+
+```
+
+Make the predictions, and retrieve the confidence/prediction intervals. 
+
+```{r reg_linear_pred01}
+
+reg_linear_pred01_plusConfInt <- data.frame(predict(reg_basisMod3, newdata = reg_pred_viz_grid, 
+                                                    interval = "confidence", level = 0.95)) %>%
+  rename(ci_lwr = lwr, ci_upr = upr)
+reg_linear_pred01_plusPredInt <- data.frame(predict(reg_basisMod3, newdata = reg_pred_viz_grid, 
+                                                    interval = "prediction", level = 0.95)) %>%
+  rename(pred_lwr = lwr, pred_upr = upr) %>% select(-fit)
+
+reg_linear_pred01 <- cbind(reg_pred_viz_grid, reg_linear_pred01_plusConfInt, reg_linear_pred01_plusPredInt)
+
+```
+
+```{r reg_linear_pred02}
+
+reg_linear_pred02_plusConfInt <- data.frame(predict(reg_expandedMod3, newdata = reg_pred_viz_grid, 
+                                                    interval = "confidence", level = 0.95)) %>% 
+  rename(ci_lwr = lwr, ci_upr = upr)
+reg_linear_pred02_plusPredInt <- data.frame(predict(reg_expandedMod3, newdata = reg_pred_viz_grid, 
+                                                    interval = "prediction", level = 0.95)) %>% 
+  rename(pred_lwr = lwr, pred_upr = upr) %>% select(-fit)
+
+reg_linear_pred02 <- cbind(reg_pred_viz_grid, reg_linear_pred02_plusConfInt, reg_linear_pred02_plusPredInt)
+
+```
+
+Finally, visualize the results.
+
+```{r reg_linear_pred01 viz}
+
+reg_linear_pred01 %>% ggplot(aes(x = x1)) + 
+  geom_ribbon(aes(ymin = pred_lwr, ymax = pred_upr), fill = 'orange') + 
+  geom_ribbon(aes(ymin = ci_lwr, ymax = ci_upr), fill = 'grey') + 
+  geom_line(aes(y = fit)) + 
+  facet_wrap(facets = ~z) + 
+  coord_cartesian(ylim = c(-7, 7))
+
+```
+
+```{r reg_linear_pred02 viz}
+
+reg_linear_pred02 %>% ggplot(aes(x = x1)) + 
+  geom_ribbon(aes(ymin = pred_lwr, ymax = pred_upr), fill = 'orange') + 
+  geom_ribbon(aes(ymin = ci_lwr, ymax = ci_upr), fill = 'grey') + 
+  geom_line(aes(y = fit)) + 
+  facet_wrap(facets = ~z) + 
+  coord_cartesian(ylim = c(-7, 7))
+
+```
+
+The predictive trends are nowhere near the same across the two models. This makes sense, considering that we are using relatively complex basis functions in reg_basisMod3 and simple linear interaction terms in reg_expandedMod3. Surprisingly, reg_basisMod3 did not show signs of overfitting when being evaluated using the test set... we will see if this holds up through the rest of our analysis. 
+
+### iiD) Train/Tune with Resampling 
+
+First, we will prepare the caret dataset to fit our models. 
+
+```{r make reg_df_caret}
+
+reg_df_caret <- data %>% 
+  select(-c(output, outcome))
+
+reg_df_caret %>% glimpse()
+
+```
+
+Next, let's define our metric and resampling method. We will perform 10-fold 5-repeat cross validation.
+
+```{r caret trainControl and metric}
+
+my_ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 5)
+
+my_metric <- 'RMSE'
+
+```
+
+Now, let's start fitting models. We will start by fitting the four linear models. The seed will be set in each chunk to ensure reproducibility.
+
+```{r caret lm additive base features}
+
+set.seed(1234)
+
+reg_caret_lm_base <- train(y ~ ., 
+                           data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                           method = "lm",
+                           metric = my_metric,
+                           preProcess = c("center", "scale"),
+                           trControl = my_ctrl)
+
+```
+
+```{r caret lm additive expanded features, warning = FALSE}
+
+set.seed(1234)
+
+reg_caret_lm_expanded <- train(y ~ ., 
+                               data = reg_df_caret,
+                               method = "lm",
+                               metric = my_metric,
+                               preProcess = c("center", "scale"),
+                               trControl = my_ctrl)
+
+```
+
+```{r caret lm reg_basisMod3}
+
+set.seed(1234)
+
+reg_caret_lm_basisMod3 <- caret::train(y ~ m + (x1 + sin(x1) + cos(x1)) * (x2 + x3 + x4 + z + I(z^2) + w) + 
+                                         (v1 + v2 + v3 + v4 + v5), 
+                                data = reg_df_caret,
+                                method = "lm",
+                                metric = my_metric,
+                                preProcess = c("center", "scale"),
+                                trControl = my_ctrl)
+
+```
+
+```{r caret lm reg_expandedMod3, warning = FALSE}
+
+set.seed(1234)
+
+reg_caret_lm_expandedMod3 <- train(y ~ .^2, 
+                                   data = reg_df_caret,
+                                   method = "lm",
+                                   metric = my_metric,
+                                   preProcess = c("center", "scale"),
+                                   trControl = my_ctrl)
+
+```
+
+Next, let's train the two elastic net models. 
+
+```{r caret lm enetMod1}
+
+set.seed(1234)
+
+reg_caret_enetMod1 <- train(y ~ m * (x1 + x2 + x3 + x4 + x5 + v1 + v2 + v3 + v4 + v5 + w + z + t)^2, 
+                               data = reg_df_caret,
+                               method = "glmnet",
+                               metric = my_metric,
+                               preProcess = c("center", "scale"),
+                               trControl = my_ctrl)
+
+```
+
+```{r caret enetMod2}
+
+set.seed(1234)
+
+reg_caret_enetMod2 <- caret::train(y ~ m + (x1 + sin(x1) + cos(x1)) * (x2 + x3 + x4 + z + I(z^2) + w) + 
+                                          (v1 + v2 + v3 + v4 + v5), 
+                                      data = reg_df_caret,
+                                      method = "glmnet",
+                                      metric = my_metric,
+                                      preProcess = c("center", "scale"),
+                                      trControl = my_ctrl)
+
+```
+
+Now, let's train the base and expanded models using neural networks.
+
+```{r caret neural network base features}
+
+set.seed(1234)
+
+reg_caret_neuralNet_base <- train(y ~ ., 
+                                  data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                                  method = "nnet",
+                                  metric = my_metric,
+                                  preProcess = c("center", "scale"),
+                                  trControl = my_ctrl, 
+                                  trace = FALSE)
+
+```
+
+```{r caret neural network expanded features}
+
+set.seed(1234)
+
+reg_caret_neuralNet_expanded <- train(y ~ ., 
+                                      data = reg_df_caret,
+                                      method = "nnet",
+                                      metric = my_metric,
+                                      preProcess = c("center", "scale"),
+                                      trControl = my_ctrl, 
+                                      trace = FALSE)
+
+```
+
+Next, let's train the base and expanded models using the random forest method.
+
+```{r caret random forest base features}
+
+set.seed(1234)
+
+reg_caret_rf_base <- train(y ~ ., 
+                           data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                           method = "rf",
+                           metric = my_metric,
+                           preProcess = c("center", "scale"),
+                           trControl = my_ctrl, 
+                           trace = FALSE)
+
+```
+
+```{r caret random forest expanded features}
+
+set.seed(1234)
+
+reg_caret_rf_expanded <- train(y ~ ., 
+                               data = reg_df_caret,
+                               method = "rf",
+                               metric = my_metric,
+                               preProcess = c("center", "scale"),
+                               trControl = my_ctrl, 
+                               trace = FALSE)
+
+```
+
+Next, let's train the base and expanded models using the gradient boosted tree method.
+
+```{r caret gradient boosted tree base features, warning = FALSE, message = FALSE}
+
+set.seed(1234)
+
+reg_caret_xgb_base <- train(y ~ ., 
+                            data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                            method = "xgbTree",
+                            metric = my_metric,
+                            preProcess = c("center", "scale"),
+                            trControl = my_ctrl, 
+                            trace = FALSE)
+
+```
+
+```{r caret gradient boosted tree expanded features, warning = FALSE, message = FALSE}
+
+set.seed(1234)
+
+reg_caret_xgb_expanded <- train(y ~ ., 
+                                data = reg_df_caret,
+                                method = "xgbTree",
+                                metric = my_metric,
+                                preProcess = c("center", "scale"),
+                                trControl = my_ctrl, 
+                                trace = FALSE)
+
+```
+
+Lastly, we will use two methods that were not discussed in class. First, let's fit the base and expanded additive models with Generalized Additive Model using Splines. 
+
+```{r caret gamSpline base features}
+
+set.seed(1234)
+
+reg_caret_gamSpline_base <- train(y ~ ., 
+                                  data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                                  method = "gamSpline",
+                                  metric = my_metric,
+                                  preProcess = c("center", "scale"),
+                                  trControl = my_ctrl)
+
+```
+
+```{r caret gamSpline expanded features}
+
+set.seed(1234)
+
+reg_caret_gamSpline_expanded <- train(y ~ ., 
+                                      data = reg_df_caret,
+                                      method = "gamSpline",
+                                      metric = my_metric,
+                                      preProcess = c("center", "scale"),
+                                      trControl = my_ctrl)
+
+```
+
+Now, let's fit the base and expanded additive models using Multi-Layer Perceptron. 
+
+```{r caret multi layer perceptron base features}
+
+set.seed(1234)
+
+reg_caret_mlp_base <- train(y ~ ., 
+                            data = (reg_df_caret %>% select(-c(x5, w, z, t))),
+                            method = "mlp",
+                            metric = my_metric,
+                            preProcess = c("center", "scale"),
+                            trControl = my_ctrl)
+
+```
+
+```{r caret multi layer perceptron expanded features}
+
+set.seed(1234)
+
+reg_caret_mlp_expanded <- train(y ~ ., 
+                                data = reg_df_caret,
+                                method = "mlp",
+                                metric = my_metric,
+                                preProcess = c("center", "scale"),
+                                trControl = my_ctrl)
+
+```
+
+Finally, we will visualize a dotplot comparing resampled RMSE for all of the models trained using caret. 
+
+```{r caret models RMSE}
+
+caret_rmse_compare <- resamples(list(LM_base = reg_caret_lm_base,
+                                     LM_expanded = reg_caret_lm_expanded,
+                                     LM_basisMod3 = reg_caret_lm_basisMod3,
+                                     LM_expandedMod3 = reg_caret_lm_expandedMod3,
+                                     ENET_interactions = reg_caret_enetMod1,
+                                     ENET_basisMod3 = reg_caret_enetMod2,
+                                     NNET_base = reg_caret_neuralNet_base,
+                                     NNET_expanded = reg_caret_neuralNet_expanded, 
+                                     RF_base = reg_caret_rf_base, 
+                                     RF_expanded = reg_caret_rf_expanded, 
+                                     XGB_base = reg_caret_xgb_base, 
+                                     XGB_expanded = reg_caret_xgb_expanded, 
+                                     gamSpline_base = reg_caret_gamSpline_base, 
+                                     gamSpline_expanded = reg_caret_gamSpline_expanded, 
+                                     MLP_base = reg_caret_mlp_base, 
+                                     MLP_expanded = reg_caret_mlp_expanded))
+
+dotplot(caret_rmse_compare, metric = 'RMSE')
+
+```
+
+As shown by the above plot of resampled RMSE, the xgBoost method with the expanded set of features had the best results by a considerable margin. This makes sense considering Dr. Yurko's positive comments regarding xgBoost from the beginning of the semester!
+
