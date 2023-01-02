@@ -2,7 +2,7 @@
 title: 'Final Project Part 1: Exploratory Data Analysis'
 author: "Nick Tedesco"
 date: "2022-12-13"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Package and Data Loading
 
-```{r packages}
+```{r packages, output = FALSE}
 
 library(ggplot2)
 library(tidyverse)
@@ -49,7 +49,7 @@ head(data)
 
 ### Summary Statistics
 
-Let's start by calculating some summary statistics on each of our variables. 
+Let's start by calculating some summary statistics for each of our variables. 
 
 ```{r summary stats}
 
