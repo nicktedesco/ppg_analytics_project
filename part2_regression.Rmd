@@ -2,7 +2,7 @@
 title: "Final Project Part 2: Regression"
 author: "Nick Tedesco"
 date: "2022-12-13"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Package and Data Loading
 
-```{r packages}
+```{r packages, output = FALSE}
 
 library(ggplot2)
 library(tidyverse)
@@ -763,7 +763,8 @@ reg_caret_xgb_base <- train(y ~ .,
                             metric = my_metric,
                             preProcess = c("center", "scale"),
                             trControl = my_ctrl, 
-                            trace = FALSE)
+                            trace = FALSE, 
+                            verbosity = 0)
 
 ```
 
@@ -777,11 +778,12 @@ reg_caret_xgb_expanded <- train(y ~ .,
                                 metric = my_metric,
                                 preProcess = c("center", "scale"),
                                 trControl = my_ctrl, 
-                                trace = FALSE)
+                                trace = FALSE, 
+                                verbosity = 0)
 
 ```
 
-Lastly, we will use two methods that were not discussed in class. First, let's fit the base and expanded additive models with Generalized Additive Model using Splines. 
+Lastly, we will use two methods that were not discussed in class. First, let's fit the base and expanded additive models with Generalized Additive Modeling using Splines. 
 
 ```{r caret gamSpline base features}
 
@@ -792,7 +794,8 @@ reg_caret_gamSpline_base <- train(y ~ .,
                                   method = "gamSpline",
                                   metric = my_metric,
                                   preProcess = c("center", "scale"),
-                                  trControl = my_ctrl)
+                                  trControl = my_ctrl, 
+                                  verbosity = 0)
 
 ```
 
@@ -805,7 +808,8 @@ reg_caret_gamSpline_expanded <- train(y ~ .,
                                       method = "gamSpline",
                                       metric = my_metric,
                                       preProcess = c("center", "scale"),
-                                      trControl = my_ctrl)
+                                      trControl = my_ctrl, 
+                                      verbosity = 0)
 
 ```
 
@@ -820,7 +824,8 @@ reg_caret_mlp_base <- train(y ~ .,
                             method = "mlp",
                             metric = my_metric,
                             preProcess = c("center", "scale"),
-                            trControl = my_ctrl)
+                            trControl = my_ctrl, 
+                            verbosity = 0)
 
 ```
 
@@ -833,7 +838,8 @@ reg_caret_mlp_expanded <- train(y ~ .,
                                 method = "mlp",
                                 metric = my_metric,
                                 preProcess = c("center", "scale"),
-                                trControl = my_ctrl)
+                                trControl = my_ctrl,
+                                verbosity = 0)
 
 ```
 
@@ -862,5 +868,5 @@ dotplot(caret_rmse_compare, metric = 'RMSE')
 
 ```
 
-As shown by the above plot of resampled RMSE, the xgBoost method with the expanded set of features had the best results by a considerable margin. This makes sense considering Dr. Yurko's positive comments regarding xgBoost from the beginning of the semester!
+As shown by the above plot of resampled RMSE, the xgBoost method with the expanded set of features had the best results by a considerable margin.
 

@@ -2,7 +2,7 @@
 title: "Final Project Part 3: Classification"
 author: "Nick Tedesco"
 date: "2022-12-13"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Package and Data Loading
 
-```{r packages}
+```{r packages, output = FALSE}
 
 library(ggplot2)
 library(tidyverse)
@@ -813,7 +813,8 @@ class_caret_xgb_base_roc <- train(outcome ~ .,
                               metric = my_class_metric1,
                               preProcess = c("center", "scale"),
                               trControl = my_class_ctrl1, 
-                              trace = FALSE)
+                              trace = FALSE, 
+                              verbosity = 0)
 
 class_caret_xgb_base_acc <- train(outcome ~ ., 
                               data = (class_df_caret %>% select(-c(x5, w, z, t))),
@@ -821,7 +822,8 @@ class_caret_xgb_base_acc <- train(outcome ~ .,
                               metric = my_class_metric2,
                               preProcess = c("center", "scale"),
                               trControl = my_class_ctrl2, 
-                              trace = FALSE)
+                              trace = FALSE, 
+                              verbosity = 0)
 
 ```
 
@@ -835,7 +837,8 @@ class_caret_xgb_expanded_roc <- train(outcome ~ .,
                                   metric = my_class_metric1,
                                   preProcess = c("center", "scale"),
                                   trControl = my_class_ctrl1, 
-                                  trace = FALSE)
+                                  trace = FALSE, 
+                                  verbosity = 0)
 
 class_caret_xgb_expanded_acc <- train(outcome ~ ., 
                                   data = class_df_caret,
@@ -843,7 +846,8 @@ class_caret_xgb_expanded_acc <- train(outcome ~ .,
                                   metric = my_class_metric2,
                                   preProcess = c("center", "scale"),
                                   trControl = my_class_ctrl2, 
-                                  trace = FALSE)
+                                  trace = FALSE, 
+                                  verbosity = 0)
 
 ```
 
@@ -858,14 +862,16 @@ class_caret_gamSpline_base_roc <- train(outcome ~ .,
                                     method = "gamSpline",
                                     metric = my_class_metric1,
                                     preProcess = c("center", "scale"),
-                                    trControl = my_class_ctrl1)
+                                    trControl = my_class_ctrl1, 
+                                    verbosity = 0)
 
 class_caret_gamSpline_base_acc <- train(outcome ~ ., 
                                     data = (class_df_caret %>% select(-c(x5, w, z, t))),
                                     method = "gamSpline",
                                     metric = my_class_metric2,
                                     preProcess = c("center", "scale"),
-                                    trControl = my_class_ctrl2)
+                                    trControl = my_class_ctrl2, 
+                                    verbosity = 0)
 
 ```
 
@@ -878,14 +884,16 @@ class_caret_gamSpline_expanded_roc <- train(outcome ~ .,
                                         method = "gamSpline",
                                         metric = my_class_metric1,
                                         preProcess = c("center", "scale"),
-                                        trControl = my_class_ctrl1)
+                                        trControl = my_class_ctrl1, 
+                                        verbosity = 0)
 
 class_caret_gamSpline_expanded_acc <- train(outcome ~ ., 
                                         data = class_df_caret,
                                         method = "gamSpline",
                                         metric = my_class_metric2,
                                         preProcess = c("center", "scale"),
-                                        trControl = my_class_ctrl2)
+                                        trControl = my_class_ctrl2, 
+                                        verbosity = 0)
 
 ```
 
@@ -900,14 +908,16 @@ class_caret_mlp_base_roc <- train(outcome ~ .,
                               method = "mlp",
                               metric = my_class_metric1,
                               preProcess = c("center", "scale"),
-                              trControl = my_class_ctrl1)
+                              trControl = my_class_ctrl1, 
+                              verbosity = 0)
 
 class_caret_mlp_base_acc <- train(outcome ~ ., 
                               data = (class_df_caret %>% select(-c(x5, w, z, t))),
                               method = "mlp",
                               metric = my_class_metric2,
                               preProcess = c("center", "scale"),
-                              trControl = my_class_ctrl2)
+                              trControl = my_class_ctrl2, 
+                              verbosity = 0)
 
 ```
 
@@ -920,14 +930,16 @@ class_caret_mlp_expanded_roc <- train(outcome ~ .,
                                   method = "mlp",
                                   metric = my_class_metric1,
                                   preProcess = c("center", "scale"),
-                                  trControl = my_class_ctrl1)
+                                  trControl = my_class_ctrl1, 
+                                  verbosity = 0)
 
 class_caret_mlp_expanded_acc <- train(outcome ~ ., 
                                   data = class_df_caret,
                                   method = "mlp",
                                   metric = my_class_metric2,
                                   preProcess = c("center", "scale"),
-                                  trControl = my_class_ctrl2)
+                                  trControl = my_class_ctrl2, 
+                                  verbosity = 0)
 
 ```
 
